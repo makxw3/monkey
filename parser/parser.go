@@ -31,6 +31,11 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
 	p.registerPrefix(token.BANG, p.parsePrefixExpression)
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
+	p.registerPrefix(token.TRUE, p.parseBoolean)
+	p.registerPrefix(token.FALSE, p.parseBoolean)
+	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
+	p.registerPrefix(token.IF, p.parseIfExpression)
+	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
 	// Register the infix-parsing-function which is the same for all infix operators
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
 	p.registerInfix(token.MINUS, p.parseInfixExpression)
@@ -75,6 +80,8 @@ func (p *Parser) expectPeek(tt token.TokenType) bool {
 	if !match {
 		msg := fmt.Sprintf("Expected next token to be %s. Got %s instead", tt, p.peekToken.Type)
 		p.errors = append(p.errors, msg)
+	} else {
+		p.nextToken()
 	}
 	return match
 }
@@ -111,7 +118,7 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 		return nil
 	}
 	// Move to the next token if the next token is token.IDENT
-	p.nextToken()
+	// p.nextToken()
 	// Set the Name variable to a new Identifier using the currentToken
 	stmt.Name = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
 	// Check if the next token is token.ASSIGN
@@ -119,10 +126,10 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 		return nil
 	}
 	// Move to the next token
-	p.nextToken()
+	// p.nextToken()
 	// TODO: Skip all the expressions for now
 	// Skip all expressions until you get to the SEMICOLON token
-	for !p.currentTokenIs(token.SEMICOLON) {
+	for p.currentToken.Type != token.SEMICOLON && !p.currentTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
 	return stmt
@@ -188,6 +195,7 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	return stmt
 }
 
+// TODO: I don't understand how this part works
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	prefixFn := p.prefixParsingFunctions[p.currentToken.Type]
 	if prefixFn == nil {
@@ -197,7 +205,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	}
 	leftExpression := prefixFn()
 
-	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
+	for precedence < p.peekPrecedence() {
 		infixFn := p.infixParsingFunctions[p.peekToken.Type]
 		if infixFn == nil {
 			return leftExpression
@@ -249,12 +257,111 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	return expression
 }
 
+func (p *Parser) parseBoolean() ast.Expression {
+	return &ast.Boolean{Token: p.currentToken, Value: p.currentTokenIs(token.TRUE)}
+}
+
+func (p *Parser) parseGroupedExpression() ast.Expression {
+	p.nextToken()
+	expr := p.parseExpression(LOWEST)
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+	return expr
+}
+
+func (p *Parser) parseIfExpression() ast.Expression {
+	expr := &ast.IfExpression{Token: p.currentToken}
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+	p.nextToken()
+	// parse the expression
+	expr.Condition = p.parseExpression(LOWEST)
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+	// p.nextToken()
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+	// p.nextToken()
+
+	expr.Consequence = p.parseBlockStatement()
+
+	if p.peekTokenIs(token.ELSE) {
+		p.nextToken()
+		if !p.expectPeek(token.LBRACE) {
+			return nil
+		}
+		// p.nextToken()
+
+		expr.Alternative = p.parseBlockStatement()
+	}
+	return expr
+}
+
+func (p *Parser) parseBlockStatement() *ast.BlockStatement {
+	block := &ast.BlockStatement{Token: p.currentToken}
+	block.Statements = []ast.Statement{}
+
+	p.nextToken()
+	for !p.currentTokenIs(token.LBRACE) && !p.currentTokenIs(token.EOF) {
+		stmt := p.parseStatement()
+		if stmt != nil {
+			block.Statements = append(block.Statements, stmt)
+		}
+		p.nextToken()
+	}
+	return block
+}
+
 func (p *Parser) registerPrefix(tt token.TokenType, fn prefixParsingFunction) {
 	p.prefixParsingFunctions[tt] = fn
 }
 
 func (p *Parser) registerInfix(tt token.TokenType, fn infixParsingFunction) {
 	p.infixParsingFunctions[tt] = fn
+}
+
+func (p *Parser) parseFunctionLiteral() ast.Expression {
+	lit := &ast.FunctionLiteral{Token: p.currentToken}
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+	p.nextToken()
+	lit.Parameters = p.parseFunctionParameters()
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+	lit.Body = p.parseBlockStatement()
+	return lit
+}
+
+func (p *Parser) parseFunctionParameters() []*ast.Identifier {
+	identifiers := []*ast.Identifier{}
+
+	// check if there are not parameters
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return identifiers
+	}
+	p.nextToken()
+
+	ident := &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
+	identifiers = append(identifiers, ident)
+
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		ident = &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
+		identifiers = append(identifiers, ident)
+	}
+
+	if !p.peekTokenIs(token.SEMICOLON) {
+		return nil
+	}
+	return identifiers
 }
 
 // The two types of functions needed for a pratt parser ie. a Prefix parsing function and an Infix parsing function

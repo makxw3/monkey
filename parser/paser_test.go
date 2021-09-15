@@ -327,3 +327,20 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		}
 	}
 }
+
+// func testIdentifier(t *testing.T, expr ast.Expression, value string) bool {
+// 	ident, ok := expr.(*ast.Identifier)
+// 	if !ok {
+// 		t.Errorf("expr not *ast.Identifier. got %T instead", expr)
+// 		return false
+// 	}
+// 	if ident.Value != value {
+// 		t.Errorf("ident.Value not %s. got=%s instead", value, ident.Value)
+// 		return false
+// 	}
+// 	if ident.TokenLiteral() != value {
+// 		t.Errorf("Ident.TokenLiteral not %s. got=%s instead", value, ident.TokenLiteral())
+// 		return false
+// 	}
+// 	return true
+// }
