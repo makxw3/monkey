@@ -197,20 +197,12 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 
 // TODO: I don't understand how this part works
 func (p *Parser) parseExpression(precedence int) ast.Expression {
+	// Parse the next expression using the prefix-parsing-function eg returns integer or identifier
 	prefixFn := p.prefixParsingFunctions[p.currentToken.Type]
-	if prefixFn == nil {
-		errMsg := fmt.Sprintf("no prefixParseFunction found for %s", p.currentToken.Type)
-		p.errors = append(p.errors, errMsg)
-		return nil
-	}
 	leftExpression := prefixFn()
-
 	for precedence < p.peekPrecedence() {
+		// returns an ast.InfixExpression for 1 + 2
 		infixFn := p.infixParsingFunctions[p.peekToken.Type]
-		if infixFn == nil {
-			return leftExpression
-		}
-		// Advances to the next token
 		p.nextToken()
 		leftExpression = infixFn(leftExpression)
 	}

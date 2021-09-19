@@ -9,7 +9,7 @@ import (
 const PROMPT = ">> "
 
 func main() {
-	input := `fn(one,two,three,four,five) { 90; }`
+	input := `1 + 2 * 3 + 4`
 	lx := lexer.New(input)
 	ps := parser.New(lx)
 
@@ -20,3 +20,6 @@ func main() {
 		}
 	}
 }
+
+// Precedence
+// The precedence value of an operator defines which operator should be evaluated first
